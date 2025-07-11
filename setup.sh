@@ -82,3 +82,13 @@ echo "ATENCION! Tienes que reiniciar la terminal antes de poder usar los alias!"
 
 # rclone sync mi-drive:/ ~/drive --progress         -- Bajar
 # rclone sync ~/drive mi-drive:/ --progress         -- Subir
+
+# QUE HACERES:
+#
+# - Hacer que si se ejecuta mas de una vez no meta los alias.
+#
+# - Hacer el script mas bonito
+#
+# - Actualizar README.sh
+#
+# - Hacer un panel de control donde decidas que hacer
