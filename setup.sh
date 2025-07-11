@@ -3,93 +3,82 @@
 set -e
 
 RCLONE_VERSION="v1.70.2"
-RCLONE_ZIP="rclone-$RCLONE_VERSION-linux-amd64.zip"
-RCLONE_URL="https://downloads.rclone.org/$RCLONE_VERSION/$RCLONE_ZIP"
+REMOTE_NAME="mi_drive"
 INSTALL_DIR="/usr/local/bin"
+USER_HOME="/home/$USER"
+FISH_CONFIG="$USER_HOME/.config/fish/config.fish"
 
-echo "📦 Instalando Rclone v$RCLONE_VERSION..."
-
-# Verificar si Rclone está instalado y es la versión correcta
-if command -v rclone &> /dev/null; then
-    INSTALLED_VERSION=$(rclone --version | head -n1 | awk '{print $2}')
-    if [[ "$INSTALLED_VERSION" == "$RCLONE_VERSION" ]]; then
-        echo "✅ Rclone v$RCLONE_VERSION ya está instalado."
-    else
-        echo "🔁 Rclone encontrado, pero no es la versión $RCLONE_VERSION. Reinstalando..."
-        sudo rm -f "$INSTALL_DIR/rclone"
-        NEED_INSTALL=true
-    fi
-else
-    echo "⬇️ Rclone no está instalado. Instalando..."
-    NEED_INSTALL=true
-fi
-
-# Instalar Rclone si es necesario
-if [[ "$NEED_INSTALL" == true ]]; then
-    curl -LO "$RCLONE_URL"
-    unzip -o "rclone-${RCLONE_VERSION}-linux-amd64.zip"
-    cd "rclone-${RCLONE_VERSION}-linux-amd64"
-    sudo cp rclone "$INSTALL_DIR"
-    sudo chown root:root "$INSTALL_DIR/rclone"
+# Instalar Rclone si no existe o no es la versión correcta
+if ! command -v rclone &> /dev/null || [[ "$(rclone --version | head -n1 | awk '{print $2}')" != "$RCLONE_VERSION" ]]; then
+    echo "Instalando Rclone $RCLONE_VERSION..."
+    curl -LO "https://downloads.rclone.org/$RCLONE_VERSION/rclone-$RCLONE_VERSION-linux-amd64.zip"
+    unzip -o "rclone-$RCLONE_VERSION-linux-amd64.zip"
+    sudo cp "rclone-$RCLONE_VERSION-linux-amd64/rclone" "$INSTALL_DIR"
     sudo chmod 755 "$INSTALL_DIR/rclone"
-    cd ..
-    rm -rf "rclone-${RCLONE_VERSION}-linux-amd64" "rclone-${RCLONE_VERSION}-linux-amd64.zip"
-    echo "✅ Rclone v$RCLONE_VERSION instalado correctamente."
-fi
-
-# Solicitar enlace de carpeta de Google Drive
-read -p "📎 Pega el enlace de la carpeta de Google Drive: " LINK
-
-# Extraer el ID de la carpeta
-FOLDER_ID=$(echo "$LINK" | grep -oE '[-\w]{25,}')
-
-if [[ -z "$FOLDER_ID" ]]; then
-    echo "❌ No se pudo extraer el ID de la carpeta. Asegúrate de que el enlace sea válido."
-    exit 1
-fi
-
-echo "📁 ID de la carpeta detectado: $FOLDER_ID"
-
-# Comprobar si el remote ya existe
-if rclone listremotes | grep -q "^${REMOTE_NAME}:"; then
-    echo "⚠️ Ya existe un remote llamado '${REMOTE_NAME}'. Usándolo."
+    rm -rf "rclone-$RCLONE_VERSION-linux-amd64" "rclone-$RCLONE_VERSION-linux-amd64.zip"
 else
-    echo "⚙️ Creando configuración automática de Rclone..."
-    rclone config create "$REMOTE_NAME" drive scope=drive root_folder_id="$FOLDER_ID"
-    echo "✅ Remote '$REMOTE_NAME' creado correctamente."
+    echo "✅ Rclone $RCLONE_VERSION ya está instalado."
 fi
 
-# Crear scripts de sincronización
-mkdir -p "$USER_HOME/scripts"
+# Pedir enlace de carpeta
+read -p "Pega el enlace de la carpeta de Google Drive que quieres sincronizar: " LINK
 
-cat <<EOF > "$USER_HOME/scripts/subirdrive"
-#!/bin/bash
-rclone sync ~/Drive ${REMOTE_NAME}:/ --progress
-EOF
+# Extraer solo la última parte después de la última barra /
+FOLDER_ID="${LINK##*/}"
 
-cat <<EOF > "$USER_HOME/scripts/bajardrive"
-#!/bin/bash
-rclone sync ${REMOTE_NAME}:/ ~/Drive --progress
-EOF
+# Preguntar nombre del remoto
+read -p "¿Cómo quieres llamar al remote? [Drive]: " REMOTE_NAME
+REMOTE_NAME="${REMOTE_NAME:-Drive}"
 
-chmod +x "$USER_HOME/scripts/subirdrive" "$USER_HOME/scripts/bajardrive"
+# Preguntar nombre de carpeta local (opcional)
+read -p "¿Cómo quieres llamar a la carpeta local donde se guardarán los archivos? [drive]: " LOCAL_FOLDER
+LOCAL_FOLDER="${LOCAL_FOLDER:-drive}"  # Si está vacío, usar "drive" como predeterminado
+echo "La carpeta se creara en /home/$USER"
 
-# Copiar scripts al home
-cp "$USER_HOME/scripts/subirdrive" "$USER_HOME/subirdrive"
-cp "$USER_HOME/scripts/bajardrive" "$USER_HOME/bajardrive"
+# Verificar si el remote ya existe
+if rclone listremotes | grep -q "^${REMOTE_NAME}:"; then
+    echo "Remote '$REMOTE_NAME' ya existe, usándolo."
+else
+    echo "Creando remote '$REMOTE_NAME'..."
+    rclone config create "$REMOTE_NAME" drive scope=drive root_folder_id="$FOLDER_ID"
+    echo "Remote '$REMOTE_NAME' creado."
+fi
 
-chmod +x "$USER_HOME/subirdrive" "$USER_HOME/bajardrive"
+# Detectar shell predeterminada
+USER_SHELL=$(basename "$SHELL")
 
-# Añadir alias a Fish
-echo "" >> "$FISH_CONFIG"
-echo "# Aliases para Drive (rclone)" >> "$FISH_CONFIG"
-echo "alias subirdrive='/home/$USER/subirdrive'" >> "$FISH_CONFIG"
-echo "alias bajardrive='/home/$USER/bajardrive'" >> "$FISH_CONFIG"
+# Definir archivo de configuración según la shell
+case "$USER_SHELL" in
+  zsh)
+    SHELL_CONFIG="$HOME/.zshrc"
+    ;;
+  bash)
+    SHELL_CONFIG="$HOME/.bashrc"
+    ;;
+  fish)
+    SHELL_CONFIG="$HOME/.config/fish/config.fish"
+    ;;
+  *)
+    echo "⚠️ Shell no reconocida: $USER_SHELL. No se añadirán alias automáticamente."
+    SHELL_CONFIG=""
+    ;;
+esac
 
-echo "✅ Alias añadidos a Fish."
+# Añadir alias si se detectó una shell compatible
+if [[ -n "$SHELL_CONFIG" ]]; then
+  {
+    echo ""
+    echo "# Alias para Rclone y Google Drive"
+    echo "alias uploadrive='rclone sync ~/${LOCAL_FOLDER} ${REMOTE_NAME}:/ --progress'"
+    echo "alias downloadrive='rclone sync ${REMOTE_NAME}:/ ~/${LOCAL_FOLDER} --progress'"
+  } >> "$SHELL_CONFIG"
 
-# Mensaje final
-echo -e "\n🎉 Todo listo, Javi. Ahora puedes usar:"
-echo "   👉 subirdrive  # Para subir tu carpeta ~/Drive a Google Drive"
-echo "   👉 bajardrive  # Para bajarla desde Google Drive"
-echo -e "\n🌐 La carpeta remota apunta a: https://drive.google.com/drive/folders/$FOLDER_ID"
+  echo "✅ Alias añadidos a $SHELL_CONFIG"
+else
+  echo "❌ No se pudieron añadir alias automáticamente. Añádelos manualmente si lo deseas."
+fi
+
+echo "ATENCION! Tienes que reiniciar la terminal antes de poder usar los alias!"
+
+# rclone sync mi-drive:/ ~/drive --progress         -- Bajar
+# rclone sync ~/drive mi-drive:/ --progress         -- Subir
