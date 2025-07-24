@@ -66,26 +66,24 @@ esac
 
 # Añadir alias si se detectó una shell compatible
 if [[ -n "$SHELL_CONFIG" ]]; then
-  {
-    echo ""
-    echo "# Alias para Rclone y Google Drive"
-    echo "alias uploadrive='rclone sync ~/${LOCAL_FOLDER} ${REMOTE_NAME}:/ --progress'"
-    echo "alias downloadrive='rclone sync ${REMOTE_NAME}:/ ~/${LOCAL_FOLDER} --progress'"
-  } >> "$SHELL_CONFIG"
-
-  echo "✅ Alias añadidos a $SHELL_CONFIG"
+  # Solo añadir si no están ya definidos
+  if ! grep -q "alias uploadrive=" "$SHELL_CONFIG"; then
+    echo "" >> "$SHELL_CONFIG"
+    echo "# Alias para Rclone y Google Drive" >> "$SHELL_CONFIG"
+    echo "alias uploadrive='rclone sync ~/${LOCAL_FOLDER} ${REMOTE_NAME}:/ --progress'" >> "$SHELL_CONFIG"
+    echo "alias downloadrive='rclone sync ${REMOTE_NAME}:/ ~/${LOCAL_FOLDER} --progress'" >> "$SHELL_CONFIG"
+    echo "Alias añadidos a $SHELL_CONFIG"
+  else
+    echo "Alias ya definidos en $SHELL_CONFIG, no se duplicarán."
+  fi
 else
-  echo "❌ No se pudieron añadir alias automáticamente. Añádelos manualmente si lo deseas."
+  echo "No se pudieron añadir alias automáticamente. Añádelos manualmente si lo deseas."
 fi
-
-echo "ATENCION! Tienes que reiniciar la terminal antes de poder usar los alias!"
 
 # rclone sync mi-drive:/ ~/drive --progress         -- Bajar
 # rclone sync ~/drive mi-drive:/ --progress         -- Subir
 
 # QUE HACERES:
-#
-# - Hacer que si se ejecuta mas de una vez no meta los alias.
 #
 # - Hacer el script mas bonito
 #
