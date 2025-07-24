@@ -82,11 +82,3 @@ fi
 
 # rclone sync mi-drive:/ ~/drive --progress         -- Bajar
 # rclone sync ~/drive mi-drive:/ --progress         -- Subir
-
-# QUE HACERES:
-#
-# - Hacer el script mas bonito
-#
-# - Actualizar README.sh
-#
-# - Hacer un panel de control donde decidas que hacer
